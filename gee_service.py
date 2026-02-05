@@ -12,12 +12,8 @@ def initialize_gee(project_id: str):
         return False
 
 def get_environmental_data(lat: float, lon: float, start_date: str, end_date: str):
-    """
-    Returns both numerical indices and Leaflet-compatible tile URLs.
-    """
     poi = ee.Geometry.Point([lon, lat])
     roi = poi.buffer(5000).bounds()
-
     # --- 1. Load Data ---
     s2_col = (ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
               .filterBounds(roi)
@@ -48,10 +44,8 @@ def get_environmental_data(lat: float, lon: float, start_date: str, end_date: st
     # --- 3. Generate Visual Map Tiles ---
     rgb_vis = {'bands': ['B4', 'B3', 'B2'], 'min': 0, 'max': 3000}
     map_id_rgb = s2_img.getMapId(rgb_vis)
-
     ndvi_vis = {'min': 0, 'max': 0.8, 'palette': ['red', 'yellow', 'green']}
     map_id_ndvi = ndvi.getMapId(ndvi_vis)
-
     return {
         "indices": stats['properties'],
         "tiles": {
@@ -61,19 +55,12 @@ def get_environmental_data(lat: float, lon: float, start_date: str, end_date: st
     }
 
 def get_historical_dataset(lat, lon, years=5):
-    """
-    Fetches monthly environmental data for the last 'X' years.
-    Includes safety checks to prevent 'No bands' errors.
-    """
     poi = ee.Geometry.Point([lon, lat])
     end_date = ee.Date(pd.Timestamp.now().strftime('%Y-%m-%d'))
     start_date = end_date.advance(-years, 'year')
-    
     n_months = end_date.difference(start_date, 'month').round().getInfo()
-    
     dataset = []
     print(f"Generating dataset for {n_months} months...")
-
     for m in range(n_months):
         try:
             m_start = start_date.advance(m, 'month')
@@ -105,9 +92,7 @@ def get_historical_dataset(lat, lon, years=5):
             else:
                 # Skip month if no data
                 continue
-                
         except Exception as e:
             print(f"Skipping month {m} due to error: {e}")
             continue
-
     return dataset
