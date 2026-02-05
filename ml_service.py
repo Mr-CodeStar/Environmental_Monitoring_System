@@ -4,15 +4,9 @@ import os
 import numpy as np
 
 def predict_trends(target_index='NDVI'):
-    """
-    Reads CSV, cleans data, trains Prophet model, and returns 
-    JSON-compatible historical and future forecast data.
-    """
     csv_path = "environment_dataset.csv"
-    
     if not os.path.exists(csv_path):
         return {"error": "Dataset not found. Please generate a dataset first."}
-
     try:
         # 1. Load Data
         df = pd.read_csv(csv_path)
@@ -58,12 +52,10 @@ def predict_trends(target_index='NDVI'):
         # Replace any potential NaN or Infinity with 0 to prevent JSON crash
         future_clean['yhat'] = future_clean['yhat'].replace([np.inf, -np.inf], 0).fillna(0)
         future_list = future_clean[['date', 'yhat']].rename(columns={'yhat': 'value'}).to_dict(orient='records')
-
         return {
             "history": history_list,
             "future": future_list
         }
-
     except Exception as e:
         print(f"ML SERVICE CRASH: {str(e)}")
         return {"error": f"Model error: {str(e)}"}
