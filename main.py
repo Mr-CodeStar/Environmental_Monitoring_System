@@ -4,8 +4,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from gee_service import initialize_gee, get_environmental_data, get_historical_dataset
-
-# Import the prediction logic from your ml_service.py file
 from ml_service import predict_trends 
 
 load_dotenv()
@@ -24,7 +22,6 @@ initialize_gee(PROJECT_ID)
 
 @app.get("/")
 async def home():
-    """Home route to verify the API is live."""
     return {
         "message": "Environmental Monitoring System API is running",
         "endpoints": {
@@ -69,14 +66,9 @@ async def download_dataset(lat: float, lon: float, years: int = 5):
 
 @app.get("/api/predict")
 async def get_prediction(index: str = "NDVI"):
-    """
-    Triggers the Machine Learning model to analyze the CSV 
-    and return historical + future forecast data.
-    """
     try:
         # Calls the function from ml_service.py
         result = predict_trends(index)
-        
         if "error" in result:
             # Handle cases where CSV doesn't exist or data is too sparse
             raise HTTPException(status_code=400, detail=result["error"])
