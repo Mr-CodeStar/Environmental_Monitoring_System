@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoMonitor Pro | Satellite Intelligence</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #3498db;
+            --success: #2ecc71;
+            --bg: #f4f7f6;
+        }
+
+        body { margin: 0; display: flex; font-family: 'Segoe UI', sans-serif; height: 100vh; background: var(--bg); }
+        #map { flex: 3; height: 100%; box-shadow: 2px 0 15px rgba(0,0,0,0.1); z-index: 1; }
+        
+        #sidebar { 
+            flex: 1; padding: 30px; background: white; border-left: 1px solid #ddd; 
+            overflow-y: auto; display: flex; flex-direction: column; z-index: 2;
+        }
+
+        h2 { color: var(--primary); margin-top: 0; border-bottom: 3px solid var(--accent); padding-bottom: 10px; font-weight: 800; }
+        
+        .menu-buttons { display: flex; gap: 10px; margin-bottom: 25px; }
+        .btn { 
+            flex: 1; padding: 14px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; 
+            font-weight: 600; transition: all 0.3s ease; background: #fff; color: #666;
+        }
+        .btn.active { background: var(--accent); color: white; border-color: #2980b9; box-shadow: 0 4px 6px rgba(52, 152, 219, 0.3); }
+        
+        .stat-card { 
+            background: #fff; padding: 18px; margin-bottom: 15px; border-radius: 10px; 
+            border: 1px solid #eee; border-left: 6px solid var(--accent); 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02); transition: transform 0.2s;
+        }
+        .stat-card:hover { transform: translateX(5px); }
+        .stat-card strong { color: var(--primary); display: block; margin-bottom: 5px; font-size: 0.85em; text-transform: uppercase; }
+
+        .loading { color: #e67e22; font-weight: bold; padding: 20px; text-align: center; border: 2px dashed #e67e22; border-radius: 10px; }
+        
+        #btnPredict {
+            display: none; margin-top: 25px; padding: 18px; background: var(--success); color: white; border: none;
+            border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 4px 10px rgba(46, 204, 113, 0.3); transition: 0.3s;
+        }
+        #btnPredict:hover { background: #27ae60; transform: translateY(-3px); }
+        .mode-hint { font-size: 0.85em; color: #7f8c8d; margin-bottom: 20px; line-height: 1.4; }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+    
+    <div id="sidebar">
+        <h2>EcoMonitor Pro</h2>
+        <div class="menu-buttons">
+            <button id="btnMonitor" class="btn active" onclick="setMode('monitor')">Live Monitor</button>
+            <button id="btnDataset" class="btn" onclick="setMode('dataset')">Train ML</button>
+        </div>
+        <p id="mode-desc" class="mode-hint"><b>Current: Monitor</b><br>Click map to view live environmental indices.</p>
+        <div id="results"><p style="text-align: center; color: #bdc3c7; margin-top: 50px;">Select a location to begin</p></div>
+        <button id="btnPredict" onclick="runPrediction()">Generate ML Model</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let currentMode = 'monitor';
+        let satelliteLayer = null;
+        let clickMarker = null; 
+        const API_BASE = "http://127.0.0.1:8000"; 
+        
+        const map = L.map('map').setView([12.97, 77.59], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        function cleanupMap() {
+            if (satelliteLayer) { map.removeLayer(satelliteLayer); satelliteLayer = null; }
+            if (clickMarker) { map.removeLayer(clickMarker); clickMarker = null; }
+        }
+
+        function setMode(mode) {
+            currentMode = mode;
+            cleanupMap();
+            document.getElementById('btnMonitor').classList.toggle('active', mode === 'monitor');
+            document.getElementById('btnDataset').classList.toggle('active', mode === 'dataset');
+            
+            const desc = document.getElementById('mode-desc');
+            const predictBtn = document.getElementById('btnPredict');
+
+            if (mode === 'monitor') {
+                desc.innerHTML = "<b>Current: Monitor</b><br>Click map to view live environmental indices.";
+                predictBtn.style.display = 'none';
+            } else {
+                desc.innerHTML = "<b>Current: Dataset Mode</b><br>Click map to extract 10-year history.";
+            }
+            document.getElementById('results').innerHTML = '<p style="text-align: center; color: #bdc3c7; margin-top: 50px;">Map cleared. Select a new point.</p>';
+        }
+
+        map.on('click', async function(e) {
+            cleanupMap();
+            const { lat, lng } = e.latlng;
+            clickMarker = L.circleMarker([lat, lng], { radius: 8, color: 'red', fillOpacity: 0.5 }).addTo(map);
+            
+            const resultsDiv = document.getElementById('results');
+            
+            if (currentMode === 'monitor') {
+                resultsDiv.innerHTML = '<div class="loading">Analyzing Imagery...</div>';
+                try {
+                    const res = await fetch(`${API_BASE}/monitor?lat=${lat}&lon=${lng}`);
+                    const json = await res.json();
+                    resultsDiv.innerHTML = `
+                        <div class="stat-card"><strong>NDVI (Vegetation)</strong>${json.data.indices.NDVI.toFixed(4)}</div>
+                        <div class="stat-card"><strong>NDWI (Moisture)</strong>${json.data.indices.NDWI.toFixed(4)}</div>
+                        <div class="stat-card"><strong>NDBI (Built-up)</strong>${json.data.indices.NDBI.toFixed(4)}</div>
+                        <div class="stat-card"><strong>LST (Surface Temp)</strong>${json.data.indices.LST.toFixed(2)}°C</div>`;
+                    satelliteLayer = L.tileLayer(json.data.tiles.ndvi_heatmap).addTo(map);
+                } catch (err) { resultsDiv.innerHTML = '<p style="color:red">Connection Error.</p>'; }
+            } else {
+                resultsDiv.innerHTML = '<div class="loading">Extracting 10-Year Data...</div>';
+                try {
+                    const res = await fetch(`${API_BASE}/dataset?lat=${lat}&lon=${lng}`);
+                    const json = await res.json();
+                    resultsDiv.innerHTML = `
+                        <div class="stat-card" style="border-left-color: var(--success);">
+                            <strong>Dataset Created</strong>Records: ${json.total_records} Months
+                        </div>`;
+                    document.getElementById('btnPredict').style.display = 'block';
+                } catch (err) { resultsDiv.innerHTML = '<p style="color:red">Failed to save dataset.</p>'; }
+            }
+        });
+
+        async function runPrediction() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="loading">Training 16 Models...<br><small>Optimizing for accuracy</small></div>';
+            try {
+                const res = await fetch(`${API_BASE}/predict`);
+                const json = await res.json();
+                if (json.status === "success") {
+                    resultsDiv.innerHTML = '<p style="color:var(--success); text-align:center;">Optimization Complete!</p>';
+                    openDashboard(json.data);
+                }
+            } catch (err) { resultsDiv.innerHTML = '<p style="color:red">ML Engine Error.</p>'; }
+        }
+
+        function openDashboard(data) {
+            const reportHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Forecast Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"><\/script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+        .nav { display: flex; background: #1a252f; padding: 10px 20px; border-radius: 12px; margin-bottom: 25px; gap: 10px; }
+        .nav-item { color: #95a5a6; padding: 12px 25px; cursor: pointer; font-weight: bold; border-radius: 8px; transition: 0.2s; }
+        .nav-item:hover { color: white; background: #34495e; }
+        .nav-item.active { color: white; background: #3498db; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .badge { display: inline-block; padding: 6px 12px; border-radius: 6px; font-weight: bold; margin-right: 10px; font-size: 0.9em; }
+        .m-badge { background: #e8f5e9; color: #2e7d32; }
+        .a-badge { background: #e3f2fd; color: #1565c0; }
+        .note { color: #7f8c8d; font-size: 0.85em; margin-top: 8px; font-style: italic; }
+        .chart-box { height: 60vh; width: 100%; margin-top: 20px; }
+        .dl-btn { background: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; float: right; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <div class="nav-item active" onclick="view('NDVI', this)">NDVI</div>
+        <div class="nav-item" onclick="view('NDWI', this)">NDWI</div>
+        <div class="nav-item" onclick="view('NDBI', this)">NDBI</div>
+        <div class="nav-item" onclick="view('LST', this)">LST</div>
+    </div>
+    <div class="card">
+        <button class="dl-btn" onclick="dl()">Download PNG</button>
+        <h1 id="title" style="margin:0 0 10px 0; color:#2c3e50;">NDVI</h1>
+        <div style="display: flex; align-items: center; flex-wrap: wrap;">
+            <span id="mb" class="badge m-badge">Model: --</span>
+            <span id="ab" class="badge a-badge">RMSE: --</span>
+        </div>
+        <div class="note">* Note: A lower RMSE value indicates higher prediction accuracy.</div>
+        <div class="chart-box"><canvas id="canvas"></canvas></div>
+    </div>
+    <script>
+        const store = ${JSON.stringify(data)};
+        let chart = null;
+        let activeIdx = 'NDVI';
+
+        function view(idx, el) {
+            activeIdx = idx;
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            el.classList.add('active');
+            
+            const info = store[idx];
+            document.getElementById('title').innerText = idx + " 12-Month Forecast";
+            document.getElementById('mb').innerText = "Winner: " + info.model_used;
+            // Updated to show raw RMSE without multiplication
+            document.getElementById('ab').innerHTML = "RMSE: " + info.accuracy_score.toFixed(4);
+
+            const ctx = document.getElementById('canvas').getContext('2d');
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [...info.history.map(d => d.date), ...info.future.map(d => d.date)],
+                    datasets: [
+                        {
+                            label: 'Historical Data',
+                            data: info.history.map(d => d.value),
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.05)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: 'AI Forecast',
+                            data: [...Array(info.history.length - 1).fill(null), info.history[info.history.length-1].value, ...info.future.map(d => d.value)],
+                            borderColor: '#2ecc71',
+                            borderDash: [5, 5],
+                            pointRadius: 4,
+                            fill: false,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+        function dl() {
+            const a = document.createElement('a');
+            a.download = activeIdx + '_Forecast.png';
+            a.href = document.getElementById('canvas').toDataURL('image/png');
+            a.click();
+        }
+        view('NDVI', document.querySelector('.nav-item'));
+    <\/script>
+</body>
+</html>`;
+            const blob = new Blob([reportHtml], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+        }
+    </script>
+</body>
+</html>
