@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoMonitor | Planetary Intelligence</title>
+    <!-- Import Three.js for guaranteed 3D Earth rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
+        :root {
+            --bg: #000000;
+            --text-main: #ffffff;
+            --text-muted: #888888;
+            --border: rgba(255, 255, 255, 0.2);
+        }
+
+        body, html { 
+            margin: 0; padding: 0; height: 100%; 
+            font-family: 'Inter', sans-serif; background: var(--bg); 
+            color: var(--text-main); overflow: hidden;
+        }
+
+        /* 1. Deep Black Grid Background */
+        .space-bg {
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: #000000;
+            background-image: radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px);
+            background-size: 40px 40px;
+            z-index: 0;
+        }
+
+        /* 2. WebGL 3D Earth Container */
+        #earth-container {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 1;
+            pointer-events: none; /* Let clicks pass through to the form */
+        }
+
+        /* 3. Falling Shooting Stars */
+        .shooting-stars {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;
+        }
+        .star {
+            position: absolute; top: 50%; left: 50%; width: 3px; height: 3px;
+            background: #fff; border-radius: 50%;
+            box-shadow: 0 0 0 4px rgba(255,255,255,0.1), 0 0 0 8px rgba(255,255,255,0.1), 0 0 20px rgba(255,255,255,1);
+            animation: shoot 4s linear infinite; opacity: 0;
+        }
+        .star::before {
+            content: ''; position: absolute; top: 50%; transform: translateY(-50%);
+            width: 200px; height: 1px; background: linear-gradient(90deg, #fff, transparent);
+        }
+        
+        /* Randomized Stars */
+        .star:nth-child(1) { top: 5%; left: 80%; animation-delay: 0s; }
+        .star:nth-child(2) { top: 20%; left: 100%; animation-delay: 1.5s; }
+        .star:nth-child(3) { top: 60%; left: 95%; animation-delay: 2.7s; }
+        .star:nth-child(4) { top: 80%; left: 60%; animation-delay: 4.2s; }
+        .star:nth-child(5) { top: -10%; left: 50%; animation-delay: 5.5s; }
+
+        @keyframes shoot {
+            0% { transform: translateX(0) translateY(0) rotate(-45deg); opacity: 1; }
+            100% { transform: translateX(-1500px) translateY(1500px) rotate(-45deg); opacity: 0; }
+        }
+
+        /* 4. Ultra-Clean UI Overlay */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; align-items: center; z-index: 3; padding-left: 10%;
+        }
+
+        .auth-container {
+            width: 420px; 
+            background: rgba(10, 10, 10, 0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 50px; border-radius: 12px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+        }
+
+        h1 { 
+            font-size: 3rem; font-weight: 800; letter-spacing: -1px; 
+            margin: 0 0 10px 0; text-transform: uppercase; 
+        }
+        p.subtitle { 
+            color: var(--text-muted); font-size: 1rem; margin-bottom: 40px; font-weight: 300; line-height: 1.5;
+        }
+
+        .input-group { margin-bottom: 25px; }
+        input { 
+            width: 100%; padding: 15px 15px; background: rgba(0,0,0,0.6); 
+            border: 1px solid var(--border); border-radius: 6px;
+            color: var(--text-main); font-size: 1rem; font-family: 'Inter', sans-serif;
+            outline: none; transition: 0.3s; box-sizing: border-box;
+        }
+        input::placeholder { color: #555; font-weight: 300; }
+        input:focus { border-color: var(--text-main); background: rgba(0,0,0,0.9); box-shadow: 0 0 15px rgba(255,255,255,0.1);}
+
+        button { 
+            width: 100%; padding: 18px; margin-top: 10px;
+            background: var(--text-main); color: var(--bg); 
+            border: none; cursor: pointer; border-radius: 6px;
+            font-size: 0.95rem; font-weight: 700; letter-spacing: 2px; 
+            text-transform: uppercase; transition: all 0.3s;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(255,255,255,0.3); }
+        button:disabled { background: #333; color: #666; cursor: not-allowed; box-shadow: none; transform: none;}
+
+        .toggle-btn { 
+            margin-top: 30px; font-size: 0.85rem; color: var(--text-muted); text-align: left;
+            cursor: pointer; transition: 0.3s; display: inline-block;
+        }
+        .toggle-btn:hover { color: var(--text-main); text-decoration: underline; text-underline-offset: 4px;}
+        
+        #message { margin-top: 20px; font-size: 0.85rem; font-weight: 500; min-height: 1.5em; letter-spacing: 1px; }
+
+        .loader { display: none; margin-top: 20px; font-size: 0.85rem; color: var(--text-main); letter-spacing: 2px; font-weight: 600;}
+        .loader span { animation: blink 1.4s infinite both; }
+        .loader span:nth-child(2) { animation-delay: 0.2s; }
+        .loader span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+    </style>
+</head>
+<body>
+    
+    <!-- Deep Space Grid Background -->
+    <div class="space-bg"></div>
+    
+    <!-- 3D WebGL Earth Container -->
+    <div id="earth-container"></div>
+    
+    <!-- Falling Stars -->
+    <div class="shooting-stars">
+        <div class="star"></div><div class="star"></div><div class="star"></div>
+        <div class="star"></div><div class="star"></div>
+    </div>
+
+    <!-- UI -->
+    <div class="overlay">
+        <div class="auth-container" id="login-form">
+            <h1>EcoMonitor</h1>
+            <p class="subtitle">Planetary intelligence and environmental forecasting.</p>
+            
+            <div class="input-group"><input type="text" id="login-username" placeholder="Username"></div>
+            <div class="input-group"><input type="password" id="login-password" placeholder="Password"></div>
+            
+            <button onclick="login()" id="login-btn">Initiate Launch</button>
+            <div id="login-loader" class="loader">AUTHENTICATING <span>.</span><span>.</span><span>.</span></div>
+            <div id="login-message" id="message"></div>
+            
+            <div class="toggle-btn" onclick="toggleForms()">Create new clearance &rarr;</div>
+        </div>
+
+        <div class="auth-container" id="register-form" style="display: none;">
+            <h1>Register</h1>
+            <p class="subtitle">Authorize satellite uplink via Google Earth Engine.</p>
+            
+            <div class="input-group"><input type="text" id="reg-username" placeholder="Username"></div>
+            <div class="input-group"><input type="password" id="reg-password" placeholder="Password"></div>
+            <div class="input-group"><input type="text" id="reg-gee" placeholder="GEE Project ID (e.g. ee-project)"></div>
+            
+            <button onclick="register()" id="reg-btn">Authorize Node</button>
+            <div id="reg-loader" class="loader">PROVISIONING <span>.</span><span>.</span><span>.</span></div>
+            <div id="reg-message" id="message"></div>
+            
+            <div class="toggle-btn" onclick="toggleForms()">&larr; Return to launch</div>
+        </div>
+    </div>
+
+    <!-- 3D Earth Script (Guaranteed to render) -->
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('earth-container').appendChild(renderer.domElement);
+
+        // Load a highly reliable Earth texture CDN
+        const textureLoader = new THREE.TextureLoader();
+        const earthTexture = textureLoader.load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+
+        // Create the Sphere
+        const geometry = new THREE.SphereGeometry(6, 64, 64);
+        const material = new THREE.MeshPhongMaterial({
+            map: earthTexture,
+            shininess: 10,
+            emissive: new THREE.Color(0x112244),
+            emissiveIntensity: 0.2 // Gives it a slight inner glow
+        });
+        const earth = new THREE.Mesh(geometry, material);
+        scene.add(earth);
+
+        // Push Earth to the right side of the screen
+        earth.position.x = 6;
+        camera.position.z = 14;
+
+        // Lighting to make it pop against the black background
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
+        scene.add(ambientLight);
+
+        const pointLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        pointLight.position.set(5, 3, 5); // Sun coming from top right
+        scene.add(pointLight);
+
+        // Soft blue backlight to simulate atmosphere glow on the dark edge
+        const backLight = new THREE.DirectionalLight(0x0066ff, 1);
+        backLight.position.set(-10, 0, -5);
+        scene.add(backLight);
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            earth.rotation.y += 0.001; // Slow majestic rotation
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+
+    <!-- Auth Logic -->
+    <script>
+        const API_BASE = "http://127.0.0.1:8000";
+
+        function toggleForms() {
+            const login = document.getElementById('login-form');
+            const reg = document.getElementById('register-form');
+            login.style.display = login.style.display === 'none' ? 'block' : 'none';
+            reg.style.display = reg.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function login() {
+            const u = document.getElementById('login-username').value;
+            const p = document.getElementById('login-password').value;
+            const msg = document.getElementById('login-message');
+            const loader = document.getElementById('login-loader');
+            const btn = document.getElementById('login-btn');
+            
+            msg.innerText = ""; loader.style.display = "block"; btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: u, password: p})
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    loader.style.display = "none"; msg.innerText = "ACCESS GRANTED. INITIALIZING..."; msg.style.color = "#ffffff";
+                    setTimeout(() => window.location.href = "/", 1000);
+                } else {
+                    loader.style.display = "none"; msg.innerText = "ACCESS DENIED: " + data.detail; msg.style.color = "#ff4444";
+                    btn.disabled = false;
+                }
+            } catch (e) {
+                loader.style.display = "none"; msg.innerText = "SYSTEM OFFLINE."; msg.style.color = "#ff4444"; btn.disabled = false;
+            }
+        }
+
+        async function register() {
+            const u = document.getElementById('reg-username').value;
+            const p = document.getElementById('reg-password').value;
+            const g = document.getElementById('reg-gee').value;
+            const msg = document.getElementById('reg-message');
+            const loader = document.getElementById('reg-loader');
+            const btn = document.getElementById('reg-btn');
+            
+            if(!u || !p || !g) { msg.innerText = "ALL FIELDS REQUIRED."; msg.style.color = "#ff4444"; return; }
+
+            msg.innerText = ""; loader.style.display = "block"; btn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/register`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username: u, password: p, gee_project_id: g})
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    loader.style.display = "none"; msg.innerText = "CREDENTIALS APPROVED."; msg.style.color = "#ffffff";
+                    setTimeout(toggleForms, 1500);
+                } else {
+                    loader.style.display = "none"; msg.innerText = "ERROR: " + data.detail; msg.style.color = "#ff4444";
+                }
+            } catch (e) { loader.style.display = "none"; msg.innerText = "SYSTEM OFFLINE."; msg.style.color = "#ff4444"; }
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>
